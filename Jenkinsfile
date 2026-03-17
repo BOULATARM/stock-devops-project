@@ -7,16 +7,24 @@ pipeline {
     }
 
     stages {
-
         stage('Clone') {
             steps {
                 checkout scm
             }
         }
 
+        stage('Verify Tools') {
+            steps {
+                bat 'python --version'
+                bat 'docker --version'
+                bat 'kubectl version --client'
+                bat 'git --version'
+            }
+        }
+
         stage('Install Dependencies') {
             steps {
-                bat 'pip install -r requirements.txt'
+                bat 'python -m pip install -r requirements.txt'
             }
         }
 
@@ -37,6 +45,7 @@ pipeline {
                 withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     bat 'echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin'
                     bat 'docker push %IMAGE_NAME%:%IMAGE_TAG%'
+                    bat 'docker logout'
                 }
             }
         }
@@ -46,7 +55,15 @@ pipeline {
                 bat 'kubectl apply -f k8s/deployment.yaml'
                 bat 'kubectl apply -f k8s/service.yaml'
                 bat 'kubectl rollout restart deployment/flask-stock-app'
+                bat 'kubectl rollout status deployment/flask-stock-app'
             }
+        }
+    }
+
+    post {
+        always {
+            bat 'kubectl get pods'
+            bat 'kubectl get services'
         }
     }
 }
