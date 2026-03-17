@@ -14,6 +14,6 @@ spec:
     spec:
       containers:
         - name: flask-stock-app
-          image: ton_dockerhub_username/flask-stock-app:latest
+          image: mouadboulatar/flask-stock-app:latest
           ports:
             - containerPort: 5000
