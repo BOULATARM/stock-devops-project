@@ -7,9 +7,22 @@ pipeline {
     }
 
     stages {
+
         stage('Clone') {
             steps {
                 checkout scm
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                bat 'pip install -r requirements.txt'
+            }
+        }
+
+        stage('Test Application') {
+            steps {
+                bat 'python -m py_compile app/app.py'
             }
         }
 
@@ -32,6 +45,7 @@ pipeline {
             steps {
                 bat 'kubectl apply -f k8s/deployment.yaml'
                 bat 'kubectl apply -f k8s/service.yaml'
+                bat 'kubectl rollout restart deployment/flask-stock-app'
             }
         }
     }

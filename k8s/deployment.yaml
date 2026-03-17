@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: flask-stock-app
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: flask-stock-app
@@ -15,5 +15,14 @@ spec:
       containers:
         - name: flask-stock-app
           image: mouadboulatar/flask-stock-app:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 5000
+          volumeMounts:
+            - name: stock-data
+              mountPath: /data
+      volumes:
+        - name: stock-data
+          hostPath:
+            path: /tmp/flask-stock-data
+            type: DirectoryOrCreate
