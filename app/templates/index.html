@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Management</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: lightblue;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            width: 70%;
+            margin: 40px auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px gray;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+
+        input, button {
+            padding: 10px;
+            font-size: 16px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        table, th, td {
+            border: 1px solid #ccc;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: center;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        a {
+            color: red;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Stock Management System</h1>
+
+        <form action="/add" method="POST">
+            <input type="text" name="name" placeholder="Product name" required>
+            <input type="number" name="quantity" placeholder="Quantity" required>
+            <button type="submit">Add Product</button>
+        </form>
+
+        <table>
+            <tr>
+                <th>#</th>
+                <th>Product Name</th>
+                <th>Quantity</th>
+                <th>Action</th>
+            </tr>
+
+            {% for product in products %}
+            <tr>
+                <td>{{ loop.index0 }}</td>
+                <td>{{ product.name }}</td>
+                <td>{{ product.quantity }}</td>
+                <td>
+                    <a href="/delete/{{ product.id }}">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+
+        <div class="footer">
+            DevOps Project with Flask, Docker, Jenkins and Kubernetes
+        </div>
+    </div>
+</body>
+</html>
