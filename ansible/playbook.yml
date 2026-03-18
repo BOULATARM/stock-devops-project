@@ -1,21 +1,239 @@
-- name: Install Docker on servers
+---
+- name: Prepare all Kubernetes nodes
   hosts: all
-  become: yes
-
+  become: true
+  vars:
+    k8s_version: "1.29"
   tasks:
-    - name: Update apt packages
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Upgrade packages
+      apt:
+        upgrade: dist
+
+    - name: Disable swap now
+      command: swapoff -a
+      changed_when: false
+
+    - name: Disable swap in fstab
+      replace:
+        path: /etc/fstab
+        regexp: '^([^#].*\sswap\s+sw\s+.*)$'
+        replace: '# \1'
+
+    - name: Load kernel modules config
+      copy:
+        dest: /etc/modules-load.d/k8s.conf
+        content: |
+          overlay
+          br_netfilter
+
+    - name: Load overlay module
+      command: modprobe overlay
+      changed_when: false
+
+    - name: Load br_netfilter module
+      command: modprobe br_netfilter
+      changed_when: false
+
+    - name: Set sysctl params for Kubernetes
+      copy:
+        dest: /etc/sysctl.d/k8s.conf
+        content: |
+          net.bridge.bridge-nf-call-iptables = 1
+          net.bridge.bridge-nf-call-ip6tables = 1
+          net.ipv4.ip_forward = 1
+
+    - name: Apply sysctl params
+      command: sysctl --system
+      changed_when: false
+
+    - name: Install base packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gpg
+          - containerd
+        state: present
+
+    - name: Ensure /etc/containerd exists
+      file:
+        path: /etc/containerd
+        state: directory
+        mode: '0755'
+
+    - name: Generate default containerd config
+      shell: containerd config default > /etc/containerd/config.toml
+      args:
+        creates: /etc/containerd/config.toml
+
+    - name: Enable SystemdCgroup in containerd
+      replace:
+        path: /etc/containerd/config.toml
+        regexp: 'SystemdCgroup = false'
+        replace: 'SystemdCgroup = true'
+
+    - name: Restart containerd
+      systemd:
+        name: containerd
+        state: restarted
+        enabled: yes
+
+    - name: Ensure keyrings directory exists
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Download Kubernetes apt key
+      shell: curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+      args:
+        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+    - name: Add Kubernetes repository
+      copy:
+        dest: /etc/apt/sources.list.d/kubernetes.list
+        content: |
+          deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /
+
+    - name: Update apt cache after Kubernetes repo
       apt:
         update_cache: yes
 
-    - name: Install required packages
+    - name: Install Kubernetes packages
       apt:
         name:
-          - docker.io
-          - python3-pip
+          - kubelet
+          - kubeadm
+          - kubectl
         state: present
 
-    - name: Start Docker service
-      service:
-        name: docker
-        state: started
+    - name: Hold Kubernetes packages
+      dpkg_selections:
+        name: "{{ item }}"
+        selection: hold
+      loop:
+        - kubelet
+        - kubeadm
+        - kubectl
+
+- name: Install Jenkins on master
+  hosts: masters
+  become: true
+  tasks:
+    - name: Install Java for Jenkins
+      apt:
+        name:
+          - fontconfig
+          - openjdk-17-jre
+        state: present
+        update_cache: yes
+
+    - name: Add Jenkins repository key
+      shell: |
+        curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key \
+        | tee /usr/share/keyrings/jenkins-keyring.asc > /dev/null
+      args:
+        creates: /usr/share/keyrings/jenkins-keyring.asc
+
+    - name: Add Jenkins repository
+      copy:
+        dest: /etc/apt/sources.list.d/jenkins.list
+        content: |
+          deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/
+
+    - name: Update apt cache after Jenkins repo
+      apt:
+        update_cache: yes
+
+    - name: Install Jenkins
+      apt:
+        name: jenkins
+        state: present
+
+    - name: Enable and start Jenkins
+      systemd:
+        name: jenkins
         enabled: yes
+        state: started
+
+- name: Initialize Kubernetes master
+  hosts: masters
+  become: true
+  tasks:
+    - name: Check if cluster already initialized
+      stat:
+        path: /etc/kubernetes/admin.conf
+      register: admin_conf
+
+    - name: Initialize kubeadm on master
+      command: kubeadm init --pod-network-cidr=192.168.0.0/16
+      when: not admin_conf.stat.exists
+      register: kubeadm_init
+
+    - name: Create .kube directory for ubuntu user
+      file:
+        path: /home/ubuntu/.kube
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+
+    - name: Copy admin.conf to ubuntu kube config
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /home/ubuntu/.kube/config
+        remote_src: yes
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'
+
+    - name: Install Calico network plugin
+      become_user: ubuntu
+      command: kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+      environment:
+        KUBECONFIG: /home/ubuntu/.kube/config
+      register: calico_result
+      changed_when: "'created' in calico_result.stdout or 'configured' in calico_result.stdout"
+
+    - name: Generate join command
+      command: kubeadm token create --print-join-command
+      register: join_command_raw
+
+    - name: Save join command for workers
+      set_fact:
+        join_command: "{{ join_command_raw.stdout }}"
+
+- name: Join worker to cluster
+  hosts: workers
+  become: true
+  tasks:
+    - name: Check if worker already joined
+      stat:
+        path: /etc/kubernetes/kubelet.conf
+      register: worker_kubelet_conf
+
+    - name: Join worker to cluster
+      command: "{{ hostvars[groups['masters'][0]]['join_command'] }}"
+      when: not worker_kubelet_conf.stat.exists
+
+- name: Show final cluster status
+  hosts: masters
+  become: true
+  tasks:
+    - name: Get nodes
+      become_user: ubuntu
+      command: kubectl get nodes
+      environment:
+        KUBECONFIG: /home/ubuntu/.kube/config
+      register: nodes_output
+      changed_when: false
+
+    - name: Print nodes
+      debug:
+        var: nodes_output.stdout_lines
