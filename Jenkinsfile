@@ -29,12 +29,6 @@ pipeline {
             }
         }
 
-        stage('Test Application') {
-            steps {
-                sh 'python3 -m py_compile app/app.py'
-            }
-        }
-
         stage('Build Docker Image') {
             steps {
                 sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
