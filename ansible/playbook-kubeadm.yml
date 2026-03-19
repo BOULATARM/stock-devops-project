@@ -1,0 +1,124 @@
+---
+- name: Prepare all nodes
+  hosts: all
+  become: true
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install base packages
+      apt:
+        name:
+          - curl
+          - containerd
+        state: present
+
+    - name: Disable swap
+      command: swapoff -a
+      changed_when: false
+
+    - name: Load kernel modules
+      copy:
+        dest: /etc/modules-load.d/k8s.conf
+        content: |
+          overlay
+          br_netfilter
+
+    - name: Load modules
+      command: "modprobe {{ item }}"
+      loop:
+        - overlay
+        - br_netfilter
+      changed_when: false
+
+    - name: Set sysctl params
+      copy:
+        dest: /etc/sysctl.d/k8s.conf
+        content: |
+          net.bridge.bridge-nf-call-iptables = 1
+          net.ipv4.ip_forward = 1
+
+    - name: Apply sysctl params
+      command: sysctl --system
+      changed_when: false
+
+    - name: Configure containerd
+      shell: |
+        containerd config default | tee /etc/containerd/config.toml
+        sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+        systemctl restart containerd
+        systemctl enable containerd
+
+- name: Install Kubernetes
+  hosts: masters:workers
+  become: true
+  tasks:
+    - name: Add Kubernetes apt key
+      shell: |
+        curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+    - name: Add Kubernetes repository
+      copy:
+        dest: /etc/apt/sources.list.d/kubernetes.list
+        content: |
+          deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /
+
+    - name: Install kubeadm, kubelet, kubectl
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
+        update_cache: yes
+
+- name: Initialize master
+  hosts: masters
+  become: true
+  tasks:
+    - name: Initialize cluster
+      shell: |
+        kubeadm init --pod-network-cidr=192.168.0.0/16 --ignore-preflight-errors=Mem
+
+    - name: Configure kubectl
+      shell: |
+        mkdir -p /home/ubuntu/.kube
+        cp -i /etc/kubernetes/admin.conf /home/ubuntu/.kube/config
+        chown -R ubuntu:ubuntu /home/ubuntu/.kube
+
+    - name: Install Calico
+      become_user: ubuntu
+      shell: |
+        kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/master/manifests/calico.yaml
+
+    - name: Generate join command
+      shell: kubeadm token create --print-join-command
+      register: join_command_raw
+
+    - name: Save join command
+      copy:
+        content: "{{ join_command_raw.stdout }}"
+        dest: /home/ubuntu/join-command.txt
+
+- name: Join worker
+  hosts: workers
+  become: true
+  tasks:
+    - name: Join cluster
+      shell: "{{ hostvars[groups['masters'][0]]['join_command_raw'].stdout }}"
+
+- name: Install Jenkins
+  hosts: jenkins
+  become: true
+  tasks:
+    - name: Install Java & Jenkins
+      shell: |
+        apt update
+        apt install -y openjdk-17-jre
+        curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io.key | tee /usr/share/keyrings/jenkins-keyring.asc > /dev/null
+        echo "deb [trusted=yes] https://pkg.jenkins.io/debian-stable binary/" > /etc/apt/sources.list.d/jenkins.list
+        apt update
+        apt install -y jenkins
+        systemctl enable jenkins
+        systemctl start jenkins

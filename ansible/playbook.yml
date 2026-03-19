@@ -1,239 +1,141 @@
 ---
-- name: Prepare all Kubernetes nodes
-  hosts: all
-  become: true
-  vars:
-    k8s_version: "1.29"
-  tasks:
-    - name: Update apt cache
-      apt:
-        update_cache: yes
-        cache_valid_time: 3600
-
-    - name: Upgrade packages
-      apt:
-        upgrade: dist
-
-    - name: Disable swap now
-      command: swapoff -a
-      changed_when: false
-
-    - name: Disable swap in fstab
-      replace:
-        path: /etc/fstab
-        regexp: '^([^#].*\sswap\s+sw\s+.*)$'
-        replace: '# \1'
-
-    - name: Load kernel modules config
-      copy:
-        dest: /etc/modules-load.d/k8s.conf
-        content: |
-          overlay
-          br_netfilter
-
-    - name: Load overlay module
-      command: modprobe overlay
-      changed_when: false
-
-    - name: Load br_netfilter module
-      command: modprobe br_netfilter
-      changed_when: false
-
-    - name: Set sysctl params for Kubernetes
-      copy:
-        dest: /etc/sysctl.d/k8s.conf
-        content: |
-          net.bridge.bridge-nf-call-iptables = 1
-          net.bridge.bridge-nf-call-ip6tables = 1
-          net.ipv4.ip_forward = 1
-
-    - name: Apply sysctl params
-      command: sysctl --system
-      changed_when: false
-
-    - name: Install base packages
-      apt:
-        name:
-          - apt-transport-https
-          - ca-certificates
-          - curl
-          - gpg
-          - containerd
-        state: present
-
-    - name: Ensure /etc/containerd exists
-      file:
-        path: /etc/containerd
-        state: directory
-        mode: '0755'
-
-    - name: Generate default containerd config
-      shell: containerd config default > /etc/containerd/config.toml
-      args:
-        creates: /etc/containerd/config.toml
-
-    - name: Enable SystemdCgroup in containerd
-      replace:
-        path: /etc/containerd/config.toml
-        regexp: 'SystemdCgroup = false'
-        replace: 'SystemdCgroup = true'
-
-    - name: Restart containerd
-      systemd:
-        name: containerd
-        state: restarted
-        enabled: yes
-
-    - name: Ensure keyrings directory exists
-      file:
-        path: /etc/apt/keyrings
-        state: directory
-        mode: '0755'
-
-    - name: Download Kubernetes apt key
-      shell: curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-      args:
-        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-
-    - name: Add Kubernetes repository
-      copy:
-        dest: /etc/apt/sources.list.d/kubernetes.list
-        content: |
-          deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /
-
-    - name: Update apt cache after Kubernetes repo
-      apt:
-        update_cache: yes
-
-    - name: Install Kubernetes packages
-      apt:
-        name:
-          - kubelet
-          - kubeadm
-          - kubectl
-        state: present
-
-    - name: Hold Kubernetes packages
-      dpkg_selections:
-        name: "{{ item }}"
-        selection: hold
-      loop:
-        - kubelet
-        - kubeadm
-        - kubectl
-
-- name: Install Jenkins on master
+- name: Install K3s on master
   hosts: masters
   become: true
   tasks:
-    - name: Install Java for Jenkins
-      apt:
-        name:
-          - fontconfig
-          - openjdk-17-jre
-        state: present
-        update_cache: yes
-
-    - name: Add Jenkins repository key
+    - name: Install K3s on master
       shell: |
-        curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key \
-        | tee /usr/share/keyrings/jenkins-keyring.asc > /dev/null
+        curl -sfL https://get.k3s.io | sh -
       args:
-        creates: /usr/share/keyrings/jenkins-keyring.asc
+        creates: /usr/local/bin/k3s
+      register: k3s_install
 
-    - name: Add Jenkins repository
+    - name: Wait for K3s to be fully ready
+      pause:
+        seconds: 10
+      when: k3s_install.changed
+
+    - name: Wait for K3s API to be ready
+      wait_for:
+        port: 6443
+        host: "{{ ansible_default_ipv4.address }}"
+        delay: 10
+        timeout: 300
+
+    - name: Get K3s token
+      slurp:
+        src: /var/lib/rancher/k3s/server/node-token
+      register: k3s_token
+
+    - name: Save K3s token to file
       copy:
-        dest: /etc/apt/sources.list.d/jenkins.list
-        content: |
-          deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/
-
-    - name: Update apt cache after Jenkins repo
-      apt:
-        update_cache: yes
-
-    - name: Install Jenkins
-      apt:
-        name: jenkins
-        state: present
-
-    - name: Enable and start Jenkins
-      systemd:
-        name: jenkins
-        enabled: yes
-        state: started
-
-- name: Initialize Kubernetes master
-  hosts: masters
-  become: true
-  tasks:
-    - name: Check if cluster already initialized
-      stat:
-        path: /etc/kubernetes/admin.conf
-      register: admin_conf
-
-    - name: Initialize kubeadm on master
-      command: kubeadm init --pod-network-cidr=192.168.0.0/16
-      when: not admin_conf.stat.exists
-      register: kubeadm_init
-
-    - name: Create .kube directory for ubuntu user
-      file:
-        path: /home/ubuntu/.kube
-        state: directory
+        content: "{{ k3s_token.content | b64decode }}"
+        dest: /home/ubuntu/k3s-token.txt
         owner: ubuntu
-        group: ubuntu
-        mode: '0755'
-
-    - name: Copy admin.conf to ubuntu kube config
-      copy:
-        src: /etc/kubernetes/admin.conf
-        dest: /home/ubuntu/.kube/config
-        remote_src: yes
-        owner: ubuntu
-        group: ubuntu
         mode: '0644'
 
-    - name: Install Calico network plugin
+    - name: Configure kubectl for ubuntu user
+      shell: |
+        mkdir -p /home/ubuntu/.kube
+        cp -i /etc/rancher/k3s/k3s.yaml /home/ubuntu/.kube/config
+        chown -R ubuntu:ubuntu /home/ubuntu/.kube
+        sed -i 's/127.0.0.1/{{ ansible_default_ipv4.address }}/g' /home/ubuntu/.kube/config
+
+    - name: Verify cluster is ready
       become_user: ubuntu
-      command: kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
-      environment:
-        KUBECONFIG: /home/ubuntu/.kube/config
-      register: calico_result
-      changed_when: "'created' in calico_result.stdout or 'configured' in calico_result.stdout"
+      shell: |
+        export KUBECONFIG=/home/ubuntu/.kube/config
+        kubectl get nodes
+      register: nodes_check
+      changed_when: false
+      ignore_errors: yes
 
-    - name: Generate join command
-      command: kubeadm token create --print-join-command
-      register: join_command_raw
+    - name: Display initial nodes
+      debug:
+        msg: "Master node is ready: {{ nodes_check.stdout_lines if nodes_check.stdout_lines is defined else 'Checking...' }}"
 
-    - name: Save join command for workers
-      set_fact:
-        join_command: "{{ join_command_raw.stdout }}"
-
-- name: Join worker to cluster
+- name: Join worker to K3s cluster
   hosts: workers
   become: true
   tasks:
-    - name: Check if worker already joined
-      stat:
-        path: /etc/kubernetes/kubelet.conf
-      register: worker_kubelet_conf
+    - name: Fetch K3s token from master
+      slurp:
+        src: /home/ubuntu/k3s-token.txt
+      delegate_to: "{{ groups['masters'][0] }}"
+      register: k3s_token_slurp
+      delegate_facts: true
 
-    - name: Join worker to cluster
-      command: "{{ hostvars[groups['masters'][0]]['join_command'] }}"
-      when: not worker_kubelet_conf.stat.exists
+    - name: Set K3s token fact
+      set_fact:
+        k3s_token: "{{ k3s_token_slurp.content | b64decode | trim }}"
+
+    - name: Get master IP
+      set_fact:
+        master_ip: "{{ hostvars[groups['masters'][0]]['ansible_default_ipv4'].address }}"
+
+    - name: Install K3s on worker
+      shell: |
+        curl -sfL https://get.k3s.io | K3S_URL=https://{{ master_ip }}:6443 K3S_TOKEN={{ k3s_token }} sh -
+      args:
+        creates: /usr/local/bin/k3s
+      register: worker_install
+
+    - name: Wait for worker to be ready
+      pause:
+        seconds: 15
+      when: worker_install.changed
 
 - name: Show final cluster status
   hosts: masters
   become: true
   tasks:
-    - name: Get nodes
+    - name: Get nodes (from master)
       become_user: ubuntu
-      command: kubectl get nodes
-      environment:
-        KUBECONFIG: /home/ubuntu/.kube/config
+      shell: |
+        export KUBECONFIG=/home/ubuntu/.kube/config
+        kubectl get nodes -o wide
       register: nodes_output
       changed_when: false
 
-    - name: Print nodes
+    - name: Display cluster nodes
       debug:
         var: nodes_output.stdout_lines
+
+    - name: Get pods (system)
+      become_user: ubuntu
+      shell: |
+        export KUBECONFIG=/home/ubuntu/.kube/config
+        kubectl get pods -A
+      register: pods_output
+      changed_when: false
+
+    - name: Display system pods
+      debug:
+        var: pods_output.stdout_lines
+
+- name: Final summary
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Print completion message
+      debug:
+        msg:
+          - "══════════════════════════════════════════════════════════════════════════"
+          - "✅ INFRASTRUCTURE COMPLÈTEMENT DÉPLOYÉE AVEC SUCCÈS !"
+          - "══════════════════════════════════════════════════════════════════════════"
+          - "📌 CLUSTER K3S:"
+          - "   Master: {{ hostvars[groups['masters'][0]]['ansible_default_ipv4'].address if groups['masters'] else 'N/A' }}"
+          - "   Worker: {{ hostvars[groups['workers'][0]]['ansible_default_ipv4'].address if groups['workers'] else 'N/A' }}"
+          - ""
+          - "📌 APPLICATION FLASK:"
+          - "   Pour déployer: cd k8s && kubectl apply -f deployment.yaml -f service.yaml"
+          - "   Accès: http://{{ hostvars[groups['workers'][0]]['ansible_default_ipv4'].address if groups['workers'] else 'N/A' }}:30080"
+          - ""
+          - "📌 GITHUB ACTIONS:"
+          - "   Configure les secrets GitHub avec :"
+          - "   - DOCKER_USERNAME: mouadboulatar"
+          - "   - DOCKER_PASSWORD: (ton token)"
+          - "   - MASTER_IP: {{ hostvars[groups['masters'][0]]['ansible_default_ipv4'].address if groups['masters'] else 'N/A' }}"
+          - "   - WORKER_IP: {{ hostvars[groups['workers'][0]]['ansible_default_ipv4'].address if groups['workers'] else 'N/A' }}"
+          - "   - KUBECONFIG: (contenu de /home/ubuntu/.kube/config du master)"
+          - "══════════════════════════════════════════════════════════════════════════"

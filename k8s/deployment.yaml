@@ -13,16 +13,25 @@ spec:
         app: flask-stock-app
     spec:
       containers:
-        - name: flask-stock-app
-          image: mouadboulatar/flask-stock-app:latest
-          imagePullPolicy: Always
-          ports:
-            - containerPort: 5000
-          volumeMounts:
-            - name: stock-data
-              mountPath: /data
-      volumes:
+      - name: flask-stock-app
+        image: mouadboulatar/flask-stock-app:latest
+        ports:
+        - containerPort: 5000
+        volumeMounts:
         - name: stock-data
-          hostPath:
-            path: /tmp/flask-stock-data
-            type: DirectoryOrCreate
+          mountPath: /data  # Important : où la DB sera stockée
+      volumes:
+      - name: stock-data
+        persistentVolumeClaim:
+          claimName: stock-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: stock-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

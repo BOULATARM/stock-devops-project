@@ -1,8 +1,40 @@
+# Python
 venv/
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+.env
+
+# Clés SSH
 devops-key.pem
 *.pem
-*.pyc
-.env
+*.key
+
+# Terraform
+terraform/.terraform/
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/.terraform.lock.hcl
+
+# IDEs
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
+
+# Base de données
+instance/*.db
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker
+*.tar
+*.tgz
+
+# Logs
+*.log
