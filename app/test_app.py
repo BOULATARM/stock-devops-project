@@ -1,6 +1,9 @@
 import unittest
 from app import app, db, Product
 
+tmp_dir = tempfile.mkdtemp()
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{tmp_dir}/test.db'
+
 class FlaskTestCase(unittest.TestCase):
 
     def setUp(self):
