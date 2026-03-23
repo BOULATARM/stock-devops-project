@@ -26,6 +26,8 @@ jobs:
         pip install -r requirements.txt
 
     - name: Run tests
+      env:
+        FLASK_ENV: testing
       run: |
         python app/test_app.py
 
@@ -53,9 +55,10 @@ jobs:
       run: |
         mkdir -p ~/.kube
         echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
+        kubectl config set-cluster default --insecure-skip-tls-verify=true
 
     - name: Deploy to K3s
       run: |
         kubectl set image deployment/flask-stock-app \
-          flask-stock-app=${{ env.IMAGE_NAME }}:${{ github.sha }}
+          flask-stock-app=${{ env.IMAGE_NAME }}:${{ github.sha }} --record
         kubectl rollout status deployment/flask-stock-app
