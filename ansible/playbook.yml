@@ -117,44 +117,25 @@
   hosts: all
   gather_facts: false
   tasks:
-    - name: Get worker public IP from inventory
-      set_fact:
-        worker_public_ip: "{{ hostvars[groups['workers'][0]]['ansible_host'] }}"
-      run_once: true
-      delegate_to: localhost
-
-    - name: Get kubeconfig content from master
-      become_user: ubuntu
-      shell: |
-        cat /home/ubuntu/.kube/config
-      register: kubeconfig_content
-      delegate_to: "{{ groups['masters'][0] }}"
-      run_once: true
-
-    - name: Print completion message with public IP and kubeconfig
+    - name: Print completion message
       debug:
         msg:
           - "══════════════════════════════════════════════════════════════════════════"
           - "✅ INFRASTRUCTURE COMPLÈTEMENT DÉPLOYÉE AVEC SUCCÈS !"
           - "══════════════════════════════════════════════════════════════════════════"
           - "📌 CLUSTER K3S:"
-          - "   Master (privée): {{ hostvars[groups['masters'][0]]['ansible_default_ipv4'].address if groups['masters'] else 'N/A' }}"
-          - "   Worker (privée): {{ hostvars[groups['workers'][0]]['ansible_default_ipv4'].address if groups['workers'] else 'N/A' }}"
-          - "   Worker (publique): {{ worker_public_ip if worker_public_ip is defined else 'N/A' }}"
+          - "   Master: {{ hostvars[groups['masters'][0]]['ansible_default_ipv4'].address if groups['masters'] else 'N/A' }}"
+          - "   Worker: {{ hostvars[groups['workers'][0]]['ansible_default_ipv4'].address if groups['workers'] else 'N/A' }}"
           - ""
           - "📌 APPLICATION FLASK:"
           - "   Pour déployer: cd k8s && kubectl apply -f deployment.yaml -f service.yaml"
-          - "   🌐 Accès public: http://{{ worker_public_ip if worker_public_ip is defined else 'N/A' }}:30080"
+          - "   Accès: http://{{ hostvars[groups['workers'][0]]['ansible_default_ipv4'].address if groups['workers'] else 'N/A' }}:30080"
           - ""
           - "📌 GITHUB ACTIONS:"
           - "   Configure les secrets GitHub avec :"
           - "   - DOCKER_USERNAME: mouadboulatar"
           - "   - DOCKER_PASSWORD: (ton token)"
           - "   - MASTER_IP: {{ hostvars[groups['masters'][0]]['ansible_default_ipv4'].address if groups['masters'] else 'N/A' }}"
-          - "   - WORKER_IP: {{ worker_public_ip if worker_public_ip is defined else 'N/A' }}"
-          - "   - KUBECONFIG: (copie ci-dessous)"
-          - "══════════════════════════════════════════════════════════════════════════"
-          - "📌 CONTENU DE KUBECONFIG À COPIER DANS LE SECRET GITHUB :"
-          - "══════════════════════════════════════════════════════════════════════════"
-          - "{{ kubeconfig_content.stdout }}"
+          - "   - WORKER_IP: {{ hostvars[groups['workers'][0]]['ansible_default_ipv4'].address if groups['workers'] else 'N/A' }}"
+          - "   - KUBECONFIG: (contenu de /home/ubuntu/.kube/config du master)"
           - "══════════════════════════════════════════════════════════════════════════"
