@@ -4,7 +4,15 @@ import os
 
 app = Flask(__name__)
 
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////data/stock.db"
+# Configuration de la base de données en fonction de l'environnement
+if os.environ.get('FLASK_ENV') == 'testing':
+    # En environnement de test, utiliser une base en mémoire
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+else:
+    # En production, utiliser le volume persistant
+    os.makedirs("/data", exist_ok=True)
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////data/stock.db"
+
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
@@ -14,9 +22,11 @@ class Product(db.Model):
     name = db.Column(db.String(100), nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
 
-with app.app_context():
-    os.makedirs("/data", exist_ok=True)
-    db.create_all()
+# Créer les tables (uniquement si ce n'est pas l'environnement de test)
+if os.environ.get('FLASK_ENV') != 'testing':
+    with app.app_context():
+        os.makedirs("/data", exist_ok=True)
+        db.create_all()
 
 @app.route("/")
 def index():
