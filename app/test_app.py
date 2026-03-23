@@ -1,10 +1,10 @@
 import unittest
 import os
-from app import app, db, Product
 
 # Définir l'environnement de test AVANT d'importer app
 os.environ['FLASK_ENV'] = 'testing'
 
+# Maintenant importer app
 from app import app, db, Product
 
 class FlaskTestCase(unittest.TestCase):

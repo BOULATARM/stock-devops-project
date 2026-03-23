@@ -6,12 +6,18 @@ app = Flask(__name__)
 
 # Configuration de la base de données en fonction de l'environnement
 if os.environ.get('FLASK_ENV') == 'testing':
-    # En environnement de test, utiliser une base en mémoire
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
 else:
     # En production, utiliser le volume persistant
-    os.makedirs("/data", exist_ok=True)
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////data/stock.db"
+    if not os.path.exists("/data"):
+        try:
+            os.makedirs("/data", exist_ok=True)
+        except PermissionError:
+            # Fallback pour les tests CI
+            os.makedirs("./data", exist_ok=True)
+            app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///./data/stock.db"
+    else:
+        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////data/stock.db"
 
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
@@ -22,11 +28,14 @@ class Product(db.Model):
     name = db.Column(db.String(100), nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
 
-# Créer les tables (uniquement si ce n'est pas l'environnement de test)
-if os.environ.get('FLASK_ENV') != 'testing':
-    with app.app_context():
-        os.makedirs("/data", exist_ok=True)
-        db.create_all()
+# Créer les tables
+with app.app_context():
+    if os.environ.get('FLASK_ENV') != 'testing':
+        try:
+            os.makedirs("/data", exist_ok=True)
+        except PermissionError:
+            os.makedirs("./data", exist_ok=True)
+    db.create_all()
 
 @app.route("/")
 def index():
