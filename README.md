@@ -126,7 +126,7 @@ http://localhost:30080
 
 ## 📊 Architecture
 
-GitHub → Jenkins → Docker → Docker Hub → Kubernetes
+GitHub → GitHub Actions→ Docker → Docker Hub → Kubernetes
 
 ---
 
