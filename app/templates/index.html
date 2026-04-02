@@ -4,445 +4,100 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stock Management</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * {
+        body {
+            font-family: Arial, sans-serif;
+            background-color: lightblue;
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
-        }
-
-        :root {
-            --bg-1: #0f172a;
-            --bg-2: #1e293b;
-            --card: rgba(255, 255, 255, 0.95);
-            --primary: #2563eb;
-            --primary-hover: #1d4ed8;
-            --danger: #ef4444;
-            --danger-hover: #dc2626;
-            --text: #1f2937;
-            --muted: #64748b;
-            --border: #e5e7eb;
-            --shadow: 0 20px 40px rgba(0, 0, 0, 0.18);
-            --radius: 20px;
-        }
-
-        body {
-            font-family: "Poppins", sans-serif;
-            min-height: 100vh;
-            background:
-                radial-gradient(circle at top left, #3b82f6 0%, transparent 30%),
-                radial-gradient(circle at bottom right, #8b5cf6 0%, transparent 30%),
-                linear-gradient(135deg, var(--bg-1), var(--bg-2));
-            color: var(--text);
-            padding: 16px;
-        }
-
-        .page {
-            width: 100%;
-            max-width: 1100px;
-            margin: 0 auto;
         }
 
         .container {
-            background: var(--card);
-            backdrop-filter: blur(12px);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            overflow: hidden;
-        }
-
-        .header {
-            padding: 28px 20px 18px;
-            text-align: center;
-            background: linear-gradient(135deg, #2563eb, #7c3aed);
-            color: white;
-        }
-
-        .header h1 {
-            font-size: 1.9rem;
-            font-weight: 700;
-            margin-bottom: 8px;
-            line-height: 1.2;
-        }
-
-        .header p {
-            font-size: 0.95rem;
-            opacity: 0.95;
-        }
-
-        .content {
+            width: 70%;
+            margin: 40px auto;
+            background: white;
             padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px gray;
         }
 
-        .form-card {
-            background: #f8fafc;
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            padding: 18px;
-            margin-bottom: 22px;
-        }
-
-        .form-title {
-            font-size: 1rem;
-            font-weight: 600;
-            margin-bottom: 14px;
-            color: var(--text);
+        h1 {
+            text-align: center;
+            color: #333;
         }
 
         form {
-            display: grid;
-            grid-template-columns: 1fr 180px 140px;
-            gap: 12px;
-        }
-
-        .input-group {
             display: flex;
-            flex-direction: column;
-            gap: 6px;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
         }
 
-        label {
-            font-size: 0.9rem;
-            font-weight: 500;
-            color: var(--muted);
-        }
-
-        input {
-            width: 100%;
-            min-height: 48px;
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 12px 14px;
-            font-size: 1rem;
-            outline: none;
-            transition: 0.25s ease;
-            background: white;
-        }
-
-        input:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
-        }
-
-        button {
-            border: none;
-            border-radius: 12px;
-            min-height: 48px;
-            padding: 12px 16px;
-            background: var(--primary);
-            color: white;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: 0.25s ease;
-            align-self: end;
-        }
-
-        button:hover {
-            background: var(--primary-hover);
-            transform: translateY(-1px);
-        }
-
-        .table-wrapper {
-            overflow-x: auto;
-            border-radius: 18px;
-            border: 1px solid var(--border);
-            background: white;
+        input, button {
+            padding: 10px;
+            font-size: 16px;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 650px;
         }
 
-        thead {
-            background: #eff6ff;
+        table, th, td {
+            border: 1px solid #ccc;
         }
 
         th, td {
-            padding: 16px 14px;
-            text-align: left;
-            border-bottom: 1px solid var(--border);
-            font-size: 0.96rem;
+            padding: 12px;
+            text-align: center;
         }
 
         th {
-            color: #1e3a8a;
-            font-weight: 600;
+            background-color: #f2f2f2;
         }
 
-        tbody tr:hover {
-            background: #f8fafc;
-        }
-
-        td.qty {
-            font-weight: 600;
-            color: #0f172a;
-        }
-
-        .delete-btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 40px;
-            padding: 10px 14px;
-            background: var(--danger);
-            color: white;
+        a {
+            color: red;
             text-decoration: none;
-            border-radius: 10px;
-            font-size: 0.92rem;
-            font-weight: 600;
-            transition: 0.25s ease;
-        }
-
-        .delete-btn:hover {
-            background: var(--danger-hover);
+            font-weight: bold;
         }
 
         .footer {
             text-align: center;
-            padding: 18px;
-            font-size: 0.9rem;
-            color: var(--muted);
-        }
-
-        /* MOBILE CARDS */
-        .mobile-list {
-            display: none;
-            gap: 14px;
-        }
-
-        .product-card {
-            background: white;
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 16px;
-            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
-        }
-
-        .product-top {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
-
-        .badge {
-            background: #dbeafe;
-            color: #1d4ed8;
-            font-size: 0.8rem;
-            font-weight: 700;
-            padding: 6px 10px;
-            border-radius: 999px;
-        }
-
-        .product-name {
-            font-size: 1rem;
-            font-weight: 600;
-            color: var(--text);
-            word-break: break-word;
-        }
-
-        .product-info {
-            display: grid;
-            gap: 10px;
-            margin-bottom: 14px;
-        }
-
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            padding-bottom: 8px;
-            border-bottom: 1px dashed #e2e8f0;
-        }
-
-        .info-label {
-            color: var(--muted);
-            font-size: 0.9rem;
-        }
-
-        .info-value {
-            font-weight: 600;
-            color: var(--text);
-            text-align: right;
-        }
-
-        .card-actions {
-            margin-top: 8px;
-        }
-
-        .card-actions .delete-btn {
-            width: 100%;
-            min-height: 46px;
-        }
-
-        /* TABLET */
-        @media (max-width: 900px) {
-            form {
-                grid-template-columns: 1fr 1fr;
-            }
-
-            button {
-                grid-column: 1 / -1;
-                width: 100%;
-            }
-        }
-
-        /* PHONE */
-        @media (max-width: 640px) {
-            body {
-                padding: 10px;
-            }
-
-            .header {
-                padding: 22px 16px 16px;
-            }
-
-            .header h1 {
-                font-size: 1.45rem;
-            }
-
-            .header p {
-                font-size: 0.88rem;
-            }
-
-            .content {
-                padding: 14px;
-            }
-
-            .form-card {
-                padding: 14px;
-                border-radius: 14px;
-            }
-
-            form {
-                grid-template-columns: 1fr;
-                gap: 12px;
-            }
-
-            input,
-            button {
-                min-height: 50px;
-                font-size: 16px; /* évite le zoom sur iPhone */
-            }
-
-            .table-wrapper {
-                display: none;
-            }
-
-            .mobile-list {
-                display: grid;
-            }
-
-            .footer {
-                font-size: 0.82rem;
-                padding: 14px;
-            }
-        }
-
-        /* VERY SMALL PHONE */
-        @media (max-width: 380px) {
-            .header h1 {
-                font-size: 1.25rem;
-            }
-
-            .product-top {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .info-row {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .info-value {
-                text-align: left;
-            }
+            margin-top: 20px;
+            color: #666;
         }
     </style>
 </head>
 <body>
-    <div class="page">
-        <div class="container">
-            <div class="header">
-                <h1>📦 Stock Management System</h1>
-                <p>Manage your products easily with a clean and mobile-friendly interface</p>
-            </div>
+    <div class="container">
+        <h1>Stock Management System</h1>
 
-            <div class="content">
-                <div class="form-card">
-                    <div class="form-title">Add a new product</div>
+        <form action="/add" method="POST">
+            <input type="text" name="name" placeholder="Product name" required>
+            <input type="number" name="quantity" placeholder="Quantity" required>
+            <button type="submit">Add Product</button>
+        </form>
 
-                    <form action="/add" method="POST">
-                        <div class="input-group">
-                            <label for="name">Product name</label>
-                            <input type="text" id="name" name="name" placeholder="Enter product name" required>
-                        </div>
+        <table>
+            <tr>
+                <th>#</th>
+                <th>Product Name</th>
+                <th>Quantity</th>
+                <th>Actionn</th>
+            </tr>
 
-                        <div class="input-group">
-                            <label for="quantity">Quantity</label>
-                            <input type="number" id="quantity" name="quantity" placeholder="Enter quantity" required>
-                        </div>
-
-                        <button type="submit">Add Product</button>
-                    </form>
-                </div>
-
-                <!-- Desktop / Tablet Table -->
-                <div class="table-wrapper">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Product Name</th>
-                                <th>Quantity</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for product in products %}
-                            <tr>
-                                <td>{{ loop.index }}</td>
-                                <td>{{ product.name }}</td>
-                                <td class="qty">{{ product.quantity }}</td>
-                                <td>
-                                    <a href="/delete/{{ product.id }}" class="delete-btn">Delete</a>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Mobile Cards -->
-                <div class="mobile-list">
-                    {% for product in products %}
-                    <div class="product-card">
-                        <div class="product-top">
-                            <div class="product-name">{{ product.name }}</div>
-                            <div class="badge">#{{ loop.index }}</div>
-                        </div>
-
-                        <div class="product-info">
-                            <div class="info-row">
-                                <span class="info-label">Quantity</span>
-                                <span class="info-value">{{ product.quantity }}</span>
-                            </div>
-                        </div>
-
-                        <div class="card-actions">
-                            <a href="/delete/{{ product.id }}" class="delete-btn">Delete Product</a>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
+            {% for product in products %}
+            <tr>
+                <td>{{ loop.index0 }}</td>
+                <td>{{ product.name }}</td>
+                <td>{{ product.quantity }}</td>
+                <td>
+                    <a href="/delete/{{ product.id }}">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
     </div>
 </body>
 </html>
